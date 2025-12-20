@@ -1,0 +1,24 @@
+1. Cross node networking
+2. State management
+    State would not save across runs of the binary because the memory does not save
+3. Resolving errors
+    What to do if a CRUD operation failed for a certain container?
+    -> Best effort, if one operation failed, skip that container/node then append to our error log
+4. Learned:
+    How to use the docker api directly in golang
+    Using redis for state management
+5. IP addresses were not properly storing
+    Cause: ip addresses are only populated for default addresses
+    Using custom networks stores IPs in NetworkSettings.Networks[name].IPAddress
+6. Managing normal containers vs nginx proxies
+    Treat nginx proxies as seperate containers led to a lot of difficulties with storing and logging them, complex logic was required and seperate database writes had to be done to store them
+    Solution: treat nginx proxies as regular containers to be injected prior to applying.
+7. Applying changes to the nodes means the nginx doesn't update bc its config still matches
+    Solution: auto reload and restart nginx to apply config changes every apply
+8. Cross node communication is hard
+    Solution: custom dns and service declaration. A container makes a request to 
+    http://api:8080 -> local dns resolves to nginx server and it checks the upstream config for the api service
+    it has the ip of the api service so it reroutes to the ip onto the api's nginx
+    nginx receives the request on port 8080 then it checks its own upstream config then resolves it to
+    the api-server backend. the internal dns then resolves this to the api-server container ip
+    the container receives the requests and responds, the request then travels back up in reverse order

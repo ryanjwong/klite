@@ -1,0 +1,70 @@
+# KLite Services Demo
+
+apiVersion: klite/v1
+kind: Deployment
+metadata:
+  name: services-demo
+  labels:
+    app: microservices
+    demo: services
+
+spec:
+  services:
+    - name: api
+      target: Backend/api-server
+      port: 8080
+
+    - name: database
+      target: Backend/postgres
+      port: 5432
+
+    - name: web
+      target: Frontend/webapp
+      port: 3000
+
+  nodes:
+    # Frontend node
+    - name: Frontend
+      proxyPort: 8080
+      containers:
+        - name: webapp
+          image: hashicorp/http-echo
+          ports:
+            - containerPort: 3000
+          command: ["-listen", ":3000", "-text", "Web App - calls API via service 'api'!"]
+          expose:
+            host: demo.klite.local
+            path: /
+            port: 3000
+
+        - name: test-client
+          image: nicolaka/netshoot
+          command: ["sleep", "infinity"]
+
+    # Backend node
+    - name: Backend
+      proxyPort: 8081
+      containers:
+        - name: api-server
+          image: hashicorp/http-echo
+          ports:
+            - containerPort: 8080
+          env:
+            # API server connects to database via service name
+            DB_HOST: "database"
+            DB_PORT: "5432"
+          command: ["-listen", ":8080", "-text", "API Server - connects to DB via service 'database'!"]
+          expose:
+            host: api.klite.local
+            path: /api
+            port: 8080
+
+        - name: postgres
+          image: hashicorp/http-echo
+          ports:
+          - containerPort: 5432
+          command: ["-listen", ":5432", "-text", "DB Server - hello!"]
+
+        - name: test-client
+          image: nicolaka/netshoot
+          command: ["sleep", "infinity"]

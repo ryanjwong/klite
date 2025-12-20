@@ -1,0 +1,9 @@
+1. Used Opus 4.5 to plan and write boilerplate
+    Cross checked with online resources to ensure good practices ie Stack Overflow Medium
+2. Implemented each component step by step
+    Container -> Engine -> Proxy -> Network -> State
+3. Used Opus 4.5 for design choices ie: dependency injection to pass the proxy the container manager
+4. Used Opus 4.5 to plan further steps and generate test cases
+5. Switched to CC Sonnet 4.5
+6. Custom DNS
+7. Daemon and reconciler

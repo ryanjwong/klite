@@ -1,0 +1,17 @@
+Create a K8s lite engine that can be describe using some yaml format
+
+Allow for seperate docker instances to communicate with one another
+
+Have a persistent nginx server allow for requests to route from yo.exa.ai to a container
+    Each node has a seperate nginx server to handle routing
+    Have the specifics described via a yaml and allow for the nginx config to be updated dynamically from the yaml
+
+Allow for yamls to describe the configuration of containers on nodes and allow for containers to be named 
+    ex: "A" "B" "C" etc..
+
+Allow for seperate nodes to communicate with one another via the Klite engine and through names
+    ex: Node Mom container A can communicate with Node Dad container D
+
+Create a simple web ui and api to interact withh this
+
+Bonus: Manage SSL and HTTPS of the nginx server by autorotating the cert via LetsEncrypt

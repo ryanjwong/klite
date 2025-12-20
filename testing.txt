@@ -1,0 +1,25 @@
+Starting
+  export DOCKER_HOST="unix://${HOME}/.colima/default/docker.sock"
+  ./bin/klite apply -f examples/services-demo.yaml --proxy-config-dir ~/klite-config
+
+Testing & Verification
+  ./bin/klite exec -n Frontend -c test-client -e "curl api:8080"
+  Test DNS Resolution
+
+  docker exec klite-Frontend-test-client nslookup api
+  # Expected: 172.28.1.253
+
+  Test Cross-Node Service Call
+
+  docker exec klite-Frontend-test-client curl http://api:8080
+  # Expected: "API Server - connects to DB via service 'database'"
+
+  View dnsmasq Logs
+
+  docker logs klite-Frontend-dnsmasq | grep query
+  # Shows DNS queries for service names
+
+  View Nginx Routing
+
+  cat ~/klite-config/Frontend/nginx.conf | grep -A 10 "stream {"
+  # Shows service routing configuration

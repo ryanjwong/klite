@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KLite Dashboard</title>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>KLite Dashboard</h1>
+            <p>Lightweight Container Orchestration</p>
+        </header>
+
+        <div id="message"></div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-label">Active Nodes</div>
+                <div class="stat-value" id="nodeCount">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Containers</div>
+                <div class="stat-value" id="containerCount">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Running</div>
+                <div class="stat-value" id="runningCount" style="color: #10b981;">0</div>
+            </div>
+        </div>
+
+    
+
+        <div id="servicesContainer">
+            <!-- Services will be inserted here -->
+        </div>
+
+        <h2>Nodes & Containers</h2>
+        <div class="nodes" id="nodesContainer">
+            <!-- Nodes will be inserted here -->
+        </div>
+    </div>
+
+    <!-- Apply Modal -->
+    <div id="applyModal" class="modal">
+        <div class="modal-content">
+            <h2>Apply Manifest</h2>
+            <input type="file" id="applyFile" accept=".yaml,.yml" />
+            <div class="modal-actions">
+                <button onclick="closeApplyModal()">Cancel</button>
+                <button onclick="applyManifest()">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content">
+            <h2>Delete Deployment</h2>
+            <input type="file" id="deleteFile" accept=".yaml,.yml" />
+            <div class="modal-actions">
+                <button onclick="closeDeleteModal()">Cancel</button>
+                <button onclick="deleteManifest()" class="danger">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load initial status
+        refreshStatus();
+
+        // Auto-refresh every 3 seconds
+        setInterval(refreshStatus, 3000);
+
+        function refreshStatus() {
+            fetch('/api/nodes')
+                .then(res => res.json())
+                .then(data => {
+                    updateStats(data);
+                    renderServices(data);
+                    renderNodes(data);
+                })
+                .catch(err => showError('Failed to fetch status: ' + err));
+        }
+
+        function updateStats(data) {
+            document.getElementById('nodeCount').textContent = data.nodeCount || 0;
+            document.getElementById('containerCount').textContent = data.totalContainers || 0;
+
+            let runningCount = 0;
+            Object.values(data.nodes || {}).forEach(containers => {
+                containers.forEach(c => {
+                    if (c.Status === 'Running') runningCount++;
+                });
+            });
+            document.getElementById('runningCount').textContent = runningCount;
+        }
+
+        function renderServices(data) {
+            const container = document.getElementById('servicesContainer');
+            const services = data.services || [];
+
+            if (services.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            // Find the target node's proxy port for external access
+            const getExternalAccess = (svc) => {
+                const targetNode = data.nodes[svc.TargetNode];
+                if (!targetNode || targetNode.length === 0) return 'N/A';
+
+                // Find the nginx-proxy container to get the proxy port
+                const nginxProxy = targetNode.find(c => c.Name === 'klite-' + svc.TargetNode + '-nginx-proxy');
+                if (!nginxProxy || !nginxProxy.AccessAddress) return 'N/A';
+
+                // Parse the proxy port from AccessAddress (e.g., "localhost:8081")
+                const proxyPort = nginxProxy.AccessAddress.split(':')[1] || '8080';
+
+                // Calculate service port: proxyPort + 10000 + servicePort
+                const externalPort = parseInt(proxyPort) + 10000 + svc.Port;
+                return `host.docker.internal:${externalPort}`;
+            };
+
+            container.innerHTML = `
+                <h2>Services</h2>
+                <div class="services-grid">
+                    ${services.map(svc => `
+                        <div class="service-card">
+                            <div class="service-name">${svc.Name}</div>
+                            <div class="service-target">Target: ${svc.TargetNode}/${svc.TargetContainer}</div>
+                            <div class="service-port">Internal Port: ${svc.Port}</div>
+                            <div class="service-access">External: ${getExternalAccess(svc)}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderNodes(data) {
+            const container = document.getElementById('nodesContainer');
+            container.innerHTML = '';
+
+            Object.entries(data.nodes || {}).forEach(([nodeName, containers]) => {
+                const nodeCard = document.createElement('div');
+                nodeCard.className = 'node-card';
+
+                const networkId = data.networks[nodeName] || 'N/A';
+
+                nodeCard.innerHTML = `
+                    <h3>Node: ${nodeName}</h3>
+                    <div class="node-info">
+                        <span>Network: ${networkId.substring(0, 12)}</span>
+                        <span>Containers: ${containers.length}</span>
+                    </div>
+                    <div class="containers">
+                        <div class="container-grid">
+                            ${containers.map(c => `
+                                <div class="container-item ${c.Status !== 'Running' ? 'stopped' : ''}">
+                                    <div class="container-name">${c.Name}</div>
+                                    <span class="container-status status-${c.Status}">${c.Status}</span>
+                                    <div class="container-ip">${c.IPAddress || 'N/A'}</div>
+                                    <div class="container-access">${c.AccessAddress || '-'}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+
+                container.appendChild(nodeCard);
+            });
+        }
+
+        function showApplyModal() {
+            document.getElementById('applyModal').classList.add('active');
+        }
+
+        function closeApplyModal() {
+            document.getElementById('applyModal').classList.remove('active');
+        }
+
+        function showDeleteModal() {
+            document.getElementById('deleteModal').classList.add('active');
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('deleteModal').classList.remove('active');
+        }
+
+        function applyManifest() {
+            const fileInput = document.getElementById('applyFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showError('Please select a manifest file');
+                return;
+            }
+
+            // Show loading state
+            showInfo(`Applying manifest: ${file.name}...`);
+            closeApplyModal();
+
+            // Disable actions during apply
+            disableActions(true);
+
+            const formData = new FormData();
+            formData.append('manifest', file);
+
+            fetch('/api/apply', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                showSuccess(data.message || 'Manifest applied successfully');
+                fileInput.value = '';
+                refreshStatus();
+            })
+            .catch(err => showError('Apply failed: ' + err))
+            .finally(() => {
+                disableActions(false);
+            });
+        }
+
+        function deleteManifest() {
+            const fileInput = document.getElementById('deleteFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showError('Please select a manifest file');
+                return;
+            }
+
+            // Show loading state
+            showInfo(`Deleting deployment from: ${file.name}...`);
+            closeDeleteModal();
+
+            // Disable actions during delete
+            disableActions(true);
+
+            const formData = new FormData();
+            formData.append('manifest', file);
+
+            fetch('/api/delete', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                showSuccess(data.message || 'Deployment deleted successfully');
+                fileInput.value = '';
+                refreshStatus();
+            })
+            .catch(err => showError('Delete failed: ' + err))
+            .finally(() => {
+                disableActions(false);
+            });
+        }
+
+        function disableActions(disabled) {
+            const buttons = document.querySelectorAll('.actions button');
+            buttons.forEach(btn => btn.disabled = disabled);
+        }
+
+        function showInfo(message) {
+            const msgDiv = document.getElementById('message');
+            msgDiv.className = 'info';
+            msgDiv.textContent = message;
+        }
+
+        function showError(message) {
+            const msgDiv = document.getElementById('message');
+            msgDiv.className = 'error';
+            msgDiv.textContent = message;
+            setTimeout(() => msgDiv.textContent = '', 5000);
+        }
+
+        function showSuccess(message) {
+            const msgDiv = document.getElementById('message');
+            msgDiv.className = 'success';
+            msgDiv.textContent = message;
+            setTimeout(() => msgDiv.textContent = '', 5000);
+        }
+    </script>
+</body>
+</html>
