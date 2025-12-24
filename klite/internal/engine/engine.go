@@ -4,6 +4,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -417,9 +418,13 @@ func (e *Engine) GetContainer(nodeName, containerName string) (*types.ContainerS
 }
 
 // Logs retrieves logs from a container
-func (e *Engine) Logs(ctx context.Context, nodeName, containerName string, follow bool) error {
-	// TODO: Implement log streaming
-	return nil
+func (e *Engine) Logs(ctx context.Context, nodeName, containerName string, follow bool) (io.ReadCloser, error) {
+	state, ok := e.GetContainer(nodeName, containerName)
+	if !ok {
+		return nil, fmt.Errorf("container %s.%s not found", nodeName, containerName)
+	}
+
+	return e.containerManager.StreamContainerLogs(ctx, state.ID, follow)
 }
 
 // Exec executes a command in a container

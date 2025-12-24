@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"strings"
@@ -269,7 +270,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 }
 
 func runLogs(cmd *cobra.Command, args []string) error {
-	_, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	setupSignalHandler(cancel)
@@ -280,14 +281,18 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	}
 	defer eng.Close()
 
-	// TODO: Parse node/container from args[0]
-	// nodeName, containerName := parseContainerRef(args[0])
+	nodeName, containerName := parseContainerRef(args[0])
 
-	// TODO: Implement log streaming
-	// eng.Logs(ctx, nodeName, containerName, followLogs)
+	reader, err := eng.Logs(ctx, nodeName, containerName, followLogs)
+	if err != nil {
+		return fmt.Errorf("failed to get logs: %w", err)
+	}
+	defer reader.Close()
 
-	_ = eng // TODO: Use engine for log streaming
-	fmt.Println("Log streaming not yet implemented")
+	if _, err := io.Copy(os.Stdout, reader); err != nil {
+		return fmt.Errorf("failed to stream logs: %w", err)
+	}
+
 	return nil
 }
 
@@ -477,6 +482,15 @@ func showDnsmasqConfig(nodeName string) error {
 
 
 	return nil
+}
+
+func parseContainerRef(ref string) (nodeName, containerName string) {
+	parts := strings.Split(ref, "/")
+	if len(parts) != 2 {
+		fmt.Fprintf(os.Stderr, "Invalid format, use: node/container (e.g., Mom/A)\n")
+		os.Exit(1)
+	}
+	return parts[0], parts[1]
 }
 
 func setupSignalHandler(cancel context.CancelFunc) {

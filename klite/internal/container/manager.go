@@ -153,6 +153,22 @@ func (m *Manager) GetContainerState(ctx context.Context, containerID string) (*t
 	return m.containerInspectToState(&resp), nil
 }
 
+// StreamContainerLogs returns the Docker container logs for a given container
+// If follow is true, the logs will be streamed continuously
+func (m *Manager) StreamContainerLogs(ctx context.Context, containerID string, follow bool) (io.ReadCloser, error) {
+	reader, err := m.client.ContainerLogs(ctx, containerID, containertypes.LogsOptions{
+		ShowStdout: true,
+		ShowStderr: true,
+		Follow:     follow,
+		Timestamps: false,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("error reading container logs: %w", err)
+	}
+
+	return reader, nil
+}
+
 // containerInspectToState converts Docker inspect response to ContainerState
 func (m *Manager) containerInspectToState(resp *dockertypes.ContainerJSON) *types.ContainerState {
 	ipAddress := resp.NetworkSettings.IPAddress
